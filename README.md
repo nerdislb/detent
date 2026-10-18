@@ -1,3 +1,43 @@
+# Detent nb (fork)
+
+This fork of [Detent](https://github.com/bjarneo/detent) adds a theme that follows another computer, and a clock that opens your clock app. It installs next to the original, because it has its own application id: `app.detent.launcher.nb`.
+
+## What is different
+
+- **Live theme.** One extra theme, `laptop`, takes its colours from a JSON file that your computer publishes. Detent reads it while it is in front: when it starts and every 30 seconds after. The theme changes in place, and the lock screen follows when the lock screen switch is on. The last theme is kept for offline use. The theme sits on the dial after the built-in ones, and the theme step has a `laptop` chip to jump to it.
+- **Clock.** Tap the clock to open the clock app that answers the alarm intent. Hold it for the setup, as before.
+
+## The theme file
+
+The file is Flux's `flux.theme` shape. The only parts Detent needs are `colors.background` and `colors.foreground`, as `#rrggbb`. It also reads `colors.accent` (then `blue`, `orange`, `green`, whichever has enough contrast with the background), `mode` (`dark` or `light`) and `name`.
+
+```json
+{"version": 1, "name": "smoke", "mode": "dark",
+ "colors": {"background": "#111419", "foreground": "#f0f3f7", "accent": "#ffffff"}}
+```
+
+Detent sends If-None-Match with the last ETag, so an unchanged theme costs a few bytes. It ignores redirects, plain http and bodies over 64 KB. A file without a readable background and foreground never replaces the colours that are showing.
+
+## Switching it on
+
+The address comes from the build, not from the source, so no address is in this repository. Without one, the live theme is off and the app behaves like Detent.
+
+```
+./gradlew assembleRelease -PdetentLiveUrl=https://your-computer.example/theme.json
+```
+
+or put `detentLiveUrl=...` in `~/.gradle/gradle.properties`.
+
+## Permission
+
+This fork asks for the INTERNET permission. Upstream Detent has none, and says so. Here it is only used for the one https read above, and only when an address is built in. Nothing else leaves the phone.
+
+## Tests
+
+`./gradlew testDebugUnitTest` runs the theme parser tests.
+
+---
+
 <p align="center">
   <a href="docs/media/detent-promo.mp4"><img src="docs/media/home.jpg" alt="Detent on a phone with the retro-82 theme. The apps sit on a dial at the right edge of the screen." width="100%"></a>
 </p>

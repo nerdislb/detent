@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import app.detent.launcher.Ease
 import app.detent.launcher.LAYOUTS
+import app.detent.launcher.Live
 import app.detent.launcher.LauncherState
 import app.detent.launcher.Palette
 import app.detent.launcher.Side
@@ -117,6 +118,9 @@ fun Onboarding(s: LauncherState, pal: Palette, theme: ThemeDef) {
                     Row(horizontalArrangement = gap) {
                         Chip("phone", theme.group == "phone", pal, { s.jumpGroup("phone") }, weight = FontWeight.Medium)
                         Chip("omarchy", theme.group == "omarchy", pal, { s.jumpGroup("omarchy") }, weight = FontWeight.Medium)
+                        if (Live.installed) {
+                            Chip(Live.GROUP, theme.group == Live.GROUP, pal, { s.jumpGroup(Live.GROUP) }, weight = FontWeight.Medium)
+                        }
                     }
                     Row(horizontalArrangement = gap) {
                         Chip("theme wallpaper", s.customWall == null, pal, { s.useThemeWallpaper() })

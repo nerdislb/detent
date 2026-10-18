@@ -1,6 +1,7 @@
 package app.detent.launcher
 
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import kotlin.math.cos
@@ -63,7 +64,7 @@ private fun phone(name: String, light: Boolean, bg: Long, fg: Long, acc: Long, h
 private fun omarchy(name: String, light: Boolean, bg: Long, fg: Long, acc: Long) =
     ThemeDef(name, "omarchy", light, bg, fg, acc, "walls/$name.webp")
 
-val THEMES = listOf(
+val BUILTIN_THEMES = listOf(
     phone("dusk", false, 0xFF1D2021, 0xFFEBDBB2, 0xFFFE8019, 0xFF504945),
     phone("ember", false, 0xFF000000, 0xFFEBE5DC, 0xFFDF6124, 0xFF3A3733),
     phone("signal", false, 0xFF000000, 0xFFFFFFFF, 0xFFFF453A, 0xFF3A3A3A),
@@ -96,7 +97,11 @@ val THEMES = listOf(
     omarchy("white", true, 0xFFFFFFFF, 0xFF000000, 0xFF6E6E6E),
 )
 
-val THEME_NAMES = THEMES.map { it.name }
+/**
+ * The themes on the theme dial. The built-in ones come first. A live theme follows the laptop and takes the last
+ * place, so these lists are state: a new colour set recomposes whatever shows it.
+ */
+val THEMES = mutableStateListOf<ThemeDef>().apply { addAll(BUILTIN_THEMES) }
 
 /** Mixes [a] into [b]. t = 1 gives [a]. */
 fun mix(a: Color, b: Color, t: Float) = Color(
@@ -129,7 +134,7 @@ class Palette(t: ThemeDef) {
     val chipBg = bg.copy(alpha = .5f)
 }
 
-val PALETTES = THEMES.map { Palette(it) }
+val PALETTES = mutableStateListOf<Palette>().apply { addAll(BUILTIN_THEMES.map { Palette(it) }) }
 
 /**
  * Colour matrix for the dot-hand art. The art is white dots on black. The dots take the hand colour and the

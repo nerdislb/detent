@@ -6,11 +6,14 @@ import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.LauncherApps
+import android.content.pm.PackageManager
 import android.content.pm.ShortcutInfo
 import android.graphics.Color
 import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
+import android.os.Process
+import android.provider.AlarmClock
 import android.provider.Settings
 import android.util.DisplayMetrics
 import androidx.activity.ComponentActivity
@@ -131,6 +134,19 @@ class MainActivity : ComponentActivity(), Host {
                 .putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, cn)
         } else null
         if (detail == null || !open(detail)) open(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+    }
+
+    /**
+     * Opens the clock app on its own start tab. The app is the one that answers the alarm intent, so it is the
+     * user's own clock app. Without a launcher entry the alarm list opens instead.
+     */
+    override fun openClock(bounds: Rect?) {
+        val alarms = Intent(AlarmClock.ACTION_SHOW_ALARMS)
+        val pkg = runCatching {
+            packageManager.resolveActivity(alarms, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
+        }.getOrNull()?.takeIf { it != "android" }
+        val app = pkg?.let { p -> repo.apps.firstOrNull { it.component.packageName == p && it.user == Process.myUserHandle() } }
+        if (app != null) launchApp(app, bounds) else open(alarms)
     }
 
     private fun screenSize(): Pair<Int, Int> = if (Build.VERSION.SDK_INT >= 30) {

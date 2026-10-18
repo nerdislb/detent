@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Only for the live theme: one small https read of the theme file at the address set at build time. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Copies the theme to the lock screen and the system wallpaper. -->
     <uses-permission android:name="android.permission.SET_WALLPAPER" />

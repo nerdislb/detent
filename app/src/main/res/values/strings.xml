@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Detent</string>
-    <string name="unread_service_label">Detent unread dots</string>
+    <string name="app_name">Detent nb</string>
+    <string name="unread_service_label">Detent nb unread dots</string>
 </resources>

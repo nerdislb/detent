@@ -13,10 +13,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.input.key.Key
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.net.URL
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.hypot
@@ -57,6 +60,9 @@ interface Host {
     fun hasNotificationAccess(): Boolean
     fun openNotificationAccess()
 
+    /** Opens the clock app, with the reveal animation growing from [bounds]. */
+    fun openClock(bounds: Rect?)
+
     /** Sets the lock screen and system wallpaper off the main thread, then calls [done] on the main thread. */
     fun setWallpaper(theme: ThemeDef, pal: Palette, left: Boolean, custom: String?, done: (Boolean) -> Unit)
 
@@ -77,6 +83,8 @@ private class Drag(val x0: Float, val y0: Float, var y: Float, val t0: Long, val
 }
 
 /** Onboarding steps. */
+private const val LIVE_POLL_MS = 30_000L
+
 object Step {
     const val WELCOME = 0
     const val SHAPE = 1
@@ -178,6 +186,9 @@ class LauncherState(
         private set
     var isHome by mutableStateOf(false)
         private set
+    private var liveJob: Job? = null
+    private val live: LiveClient? = BuildConfig.LIVE_URL.takeIf { it.startsWith("https://") }
+        ?.let { runCatching { LiveClient(URL(it)) }.getOrNull() }
     private var unread by mutableStateOf<Map<String, Long>>(emptyMap())
     private var opened by mutableStateOf(prefs.opened())
 
@@ -188,6 +199,8 @@ class LauncherState(
     init {
         fb.sound = sound
         fb.haptics = haptics
+        // The live theme has to be on the dial before the saved theme index is read.
+        if (live != null) Live.install(prefs.liveBody?.let(::parseLiveTheme) ?: LiveTheme("laptop", false, 0xFF1D2021, 0xFFEBDBB2, 0xFFFE8019, 0xFF3A3938))
         val saved = prefs.load()
         if (saved != null) {
             cfg = saved.cfg
@@ -247,6 +260,7 @@ class LauncherState(
         now = System.currentTimeMillis()
         notifAccess = host.hasNotificationAccess()
         isHome = host.isDefaultHome()
+        startLive()
         val o = open ?: return
         // Back from an app: the name drops back into the dial.
         if (o.phase != Phase.Out) {
@@ -257,6 +271,7 @@ class LauncherState(
 
     fun onPause() {
         resumed = false
+        liveJob?.cancel()
     }
 
     fun onStop() {
@@ -287,6 +302,43 @@ class LauncherState(
     fun release() {
         loop?.cancel()
         fb.release()
+    }
+
+    // Live theme.
+
+    /** Checks the laptop now and then, only while the launcher is in front. */
+    private fun startLive() {
+        val client = live ?: return
+        liveJob?.cancel()
+        liveJob = scope.launch {
+            while (isActive) {
+                val r = withContext(Dispatchers.IO) { client.fetch() }
+                if (r is Fetch.Updated) {
+                    prefs.liveBody = r.body
+                    Live.install(r.theme)
+                    // The lock screen follows when the live theme is the one in use.
+                    if (ob == null && cfg.theme == Live.index) syncWallpaper()
+                }
+                delay(LIVE_POLL_MS)
+            }
+        }
+    }
+
+    // Clock.
+
+    /** Tap the clock: open the clock app. */
+    fun openClock(bounds: Rect?) {
+        if (blocked() || ob != null || scrub != null) return
+        fb.tap()
+        host.openClock(bounds)
+    }
+
+    /** Hold the clock: the setup, like holding an empty spot. */
+    fun holdClock() {
+        if (blocked() || ob != null || scrub != null) return
+        fb.click(true)
+        fb.heavy()
+        openSetup()
     }
 
     // Engine.
@@ -618,7 +670,7 @@ class LauncherState(
     private fun syncWallpaper() {
         if (!lockWall) return
         val custom = customWall
-        val key = "${THEMES[cfg.theme].name}|${cfg.side}|${custom ?: "theme"}"
+        val key = "${THEMES[cfg.theme].name}|${PALETTES[cfg.theme].bg.value}|${cfg.side}|${custom ?: "theme"}"
         if (prefs.appliedWall == key) return
         host.setWallpaper(THEMES[cfg.theme], PALETTES[cfg.theme], left, custom) { ok ->
             if (ok) prefs.appliedWall = key else showToast("can't set the lock screen")

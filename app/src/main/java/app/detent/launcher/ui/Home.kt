@@ -20,9 +20,11 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -71,6 +73,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toAndroidRect
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
@@ -80,6 +83,8 @@ import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -99,16 +104,16 @@ import app.detent.launcher.Spin
 import app.detent.launcher.Step
 import app.detent.launcher.THEMES
 import app.detent.launcher.ThemeDef
-import app.detent.launcher.handMatrix
 import app.detent.launcher.W
+import app.detent.launcher.handMatrix
 import app.detent.launcher.mod
+import java.util.Calendar
+import kotlin.math.max
+import kotlin.math.min
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.Calendar
-import kotlin.math.max
-import kotlin.math.min
 
 private val DAYS = listOf("sun", "mon", "tue", "wed", "thu", "fri", "sat")
 private val MONTHS = listOf("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
@@ -333,8 +338,19 @@ private fun Clock(s: LauncherState, pal: Palette) {
     }
     val time = hour + ":" + cal.get(Calendar.MINUTE).toString().padStart(2, '0')
     val date = "${DAYS[cal.get(Calendar.DAY_OF_WEEK) - 1]} ${cal.get(Calendar.DAY_OF_MONTH)} ${MONTHS[cal.get(Calendar.MONTH)]}"
+    var bounds by remember { mutableStateOf<android.graphics.Rect?>(null) }
+    val active = s.ob == null && !s.search && s.open == null && s.menu == null && s.scrub == null
     SideBox(s.left, u.clockTop, 28f, Modifier.graphicsLayer { this.alpha = alpha }) {
         Column(
+            Modifier
+                .onGloballyPositioned { bounds = it.boundsInWindow().toAndroidRect() }
+                .combinedClickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    enabled = active,
+                    onClick = { s.openClock(bounds) },
+                    onLongClick = { s.holdClock() },
+                ),
             horizontalAlignment = if (s.left) Alignment.End else Alignment.Start,
             verticalArrangement = Arrangement.spacedBy(u.dp(6f)),
         ) {

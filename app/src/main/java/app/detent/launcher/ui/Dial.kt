@@ -25,7 +25,7 @@ import app.detent.launcher.Layout
 import app.detent.launcher.Markers
 import app.detent.launcher.Palette
 import app.detent.launcher.Step
-import app.detent.launcher.THEME_NAMES
+import app.detent.launcher.THEMES
 import app.detent.launcher.W
 import app.detent.launcher.fitScale
 import app.detent.launcher.labelPose
@@ -49,7 +49,7 @@ fun DialCanvas(s: LauncherState, pal: Palette) {
     val scrub = s.scrub
     val themeStep = s.ob == Step.THEME
     val apps = s.dialApps
-    val names = scrub ?: if (themeStep) THEME_NAMES else remember(apps) { apps.map { it.display } }
+    val names = scrub ?: if (themeStep) THEMES.map { it.name } else remember(apps) { apps.map { it.display } }
     val dots = if (scrub == null && !themeStep) apps.map { s.hasDot(it) } else null
     val o = s.open
     val hide = if (o != null && o.fromDial && dots != null) apps.indexOfFirst { it.key == o.key } else -1

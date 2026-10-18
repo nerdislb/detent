@@ -58,6 +58,11 @@ class Prefs(ctx: Context) {
         get() = sp.getString("appliedWall", null)
         set(v) = sp.edit { putString("appliedWall", v) }
 
+    /** The last theme body from the laptop, so the live theme has its colours before the first fetch. */
+    var liveBody: String?
+        get() = sp.getString("liveBody", null)
+        set(v) = sp.edit { putString("liveBody", v) }
+
     fun opened(): Map<String, Long> = openedSp.all.mapNotNull { (k, v) -> (v as? Long)?.let { k to it } }.toMap()
 
     fun markOpened(pkgUser: String, time: Long) = openedSp.edit { putLong(pkgUser, time) }

@@ -11,13 +11,20 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "app.detent.launcher"
+        // The fork installs next to upstream Detent, so it has its own application id.
+        applicationId = "app.detent.launcher.nb"
         // Predefined vibration effects and the home role need API 29.
         minSdk = 29
         targetSdk = 36
         // CI passes the tag as -PdetentVersion and the run number as -PdetentCode.
         versionCode = providers.gradleProperty("detentCode").orNull?.toInt() ?: 1
         versionName = providers.gradleProperty("detentVersion").orNull ?: "0.1.0"
+
+        // Address of the laptop theme (https only). It comes from the build, not the source:
+        // ./gradlew assembleRelease -PdetentLiveUrl=https://host/theme.json, or ~/.gradle/gradle.properties.
+        // Empty switches the live theme off.
+        val liveUrl = providers.gradleProperty("detentLiveUrl").orNull.orEmpty()
+        buildConfigField("String", "LIVE_URL", "\"${liveUrl.replace("\"", "")}\"")
     }
 
     signingConfigs {
@@ -48,6 +55,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     androidResources {
@@ -75,4 +83,8 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.animation)
+
+    testImplementation(libs.junit)
+    // The Android jar only stubs org.json, so unit tests bring the real one.
+    testImplementation(libs.json)
 }
