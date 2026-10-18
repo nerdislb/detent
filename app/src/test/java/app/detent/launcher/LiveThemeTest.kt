@@ -6,6 +6,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.net.URL
 
 class LiveThemeTest {
     private fun body(
@@ -86,5 +87,59 @@ class LiveThemeTest {
     @Test
     fun anUnknownKeyDoesNotMatter() {
         assertNotNull(parseLiveTheme("{\"extra\":1,\"colors\":{\"background\":\"#000000\",\"foreground\":\"#ffffff\",\"zzz\":3}}"))
+    }
+
+    private val sha = "3f0ee7d38d7d3022845bbd796c0291ae77be9f7ad1a6bdbaca19ca2ed1349475"
+
+    private fun withWall(path: String, hash: String = sha) =
+        "{\"colors\":{\"background\":\"#000000\",\"foreground\":\"#ffffff\"}," +
+            "\"wallpaper\":{\"path\":\"$path\",\"sha256\":\"$hash\"}}"
+
+    @Test
+    fun readsTheWallpaperReference() {
+        val w = parseLiveTheme(withWall("wallpaper/3f0ee7.jpg"))!!.wall!!
+        assertEquals("wallpaper/3f0ee7.jpg", w.path)
+        assertEquals(sha, w.sha)
+    }
+
+    @Test
+    fun aThemeWithoutAWallpaperHasNone() {
+        assertNull(parseLiveTheme(body())!!.wall)
+    }
+
+    @Test
+    fun theHashIsLowerCased() {
+        assertEquals(sha, parseLiveTheme(withWall("w/a.jpg", sha.uppercase()))!!.wall!!.sha)
+    }
+
+    @Test
+    fun badWallpaperReferencesAreDroppedButTheThemeStays() {
+        for (path in listOf("../x.jpg", "/abs.jpg", "//evil.example/x.jpg", "http://evil.example/x", "a/../b.jpg", "", "a b.jpg")) {
+            val t = parseLiveTheme(withWall(path))
+            assertNotNull(path, t)
+            assertNull(path, t!!.wall)
+        }
+        assertNull(parseLiveTheme(withWall("w/a.jpg", "abc"))!!.wall)
+    }
+
+    private val base = URL("https://laptop.example:8444/theme.json")
+
+    @Test
+    fun resolvesTheWallpaperNextToTheTheme() {
+        assertEquals("https://laptop.example:8444/wallpaper/a.jpg", resolveWallUrl(base, "wallpaper/a.jpg").toString())
+    }
+
+    @Test
+    fun refusesAWallpaperOnAnotherHost() {
+        assertNull(resolveWallUrl(base, "//evil.example/a.jpg"))
+        assertNull(resolveWallUrl(base, "https://evil.example/a.jpg"))
+        assertNull(resolveWallUrl(base, "../a.jpg"))
+    }
+
+    @Test
+    fun theDialLabelIsShortAndMarked() {
+        assertEquals("~smoke", liveLabel("smoke"))
+        assertEquals("laptop", liveLabel("laptop"))
+        assertEquals(17, liveLabel("x".repeat(24)).length)
     }
 }

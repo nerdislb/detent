@@ -29,6 +29,7 @@ import app.detent.launcher.ui.DetentRoot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import java.io.File
 import kotlin.concurrent.thread
 
 class MainActivity : ComponentActivity(), Host {
@@ -147,6 +148,13 @@ class MainActivity : ComponentActivity(), Host {
         }.getOrNull()?.takeIf { it != "android" }
         val app = pkg?.let { p -> repo.apps.firstOrNull { it.component.packageName == p && it.user == Process.myUserHandle() } }
         if (app != null) launchApp(app, bounds) else open(alarms)
+    }
+
+    override fun dataDir(): File = filesDir
+
+    override fun fitWallpaper(src: File, dest: File): Boolean {
+        val (w, h) = screenSize()
+        return runCatching { CustomWallpaper.crop(src, w, h, dest) }.isSuccess
     }
 
     private fun screenSize(): Pair<Int, Int> = if (Build.VERSION.SDK_INT >= 30) {

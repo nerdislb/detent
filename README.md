@@ -4,16 +4,18 @@ This fork of [Detent](https://github.com/bjarneo/detent) adds a theme that follo
 
 ## What is different
 
-- **Live theme.** One extra theme, `laptop`, takes its colours from a JSON file that your computer publishes. Detent reads it while it is in front: when it starts and every 30 seconds after. The theme changes in place, and the lock screen follows when the lock screen switch is on. The last theme is kept for offline use. The theme sits on the dial after the built-in ones, and the theme step has a `laptop` chip to jump to it.
+- **Live theme.** One extra theme, `laptop`, takes its colours from a JSON file that your computer publishes. Detent reads it while it is in front: when it starts and every 30 seconds after. The theme changes in place, and the lock screen follows when the lock screen switch is on. The last theme is kept for offline use. The theme sits on the dial after the built-in ones, marked with a tilde (`~smoke`), and the theme step has a `laptop` chip to jump to it.
+- **Live wallpaper.** When the theme file names a wallpaper, Detent downloads it once, checks its SHA-256, crops it to the shape of the screen and shows it behind the dial, like a built-in Omarchy theme. A new wallpaper replaces the old one, and the lock screen follows when the lock screen switch is on. Your own wallpaper from the setup still wins. Without a wallpaper in the file, the theme uses the dot-hand art.
 - **Clock.** Tap the clock to open the clock app that answers the alarm intent. Hold it for the setup, as before.
 
 ## The theme file
 
-The file is Flux's `flux.theme` shape. The only parts Detent needs are `colors.background` and `colors.foreground`, as `#rrggbb`. It also reads `colors.accent` (then `blue`, `orange`, `green`, whichever has enough contrast with the background), `mode` (`dark` or `light`) and `name`.
+The file is Flux's `flux.theme` shape. The only parts Detent needs are `colors.background` and `colors.foreground`, as `#rrggbb`. It also reads `wallpaper` (a `path` next to the theme file and the image's `sha256`; the path has to stay on the same host, and the image can be up to 12 MB) and `colors.accent` (then `blue`, `orange`, `green`, whichever has enough contrast with the background), `mode` (`dark` or `light`) and `name`.
 
 ```json
 {"version": 1, "name": "smoke", "mode": "dark",
- "colors": {"background": "#111419", "foreground": "#f0f3f7", "accent": "#ffffff"}}
+ "colors": {"background": "#111419", "foreground": "#f0f3f7", "accent": "#ffffff"},
+ "wallpaper": {"path": "wallpaper/3f0ee7d3.jpg", "sha256": "3f0ee7d38d7d3022845bbd796c0291ae77be9f7ad1a6bdbaca19ca2ed1349475"}}
 ```
 
 Detent sends If-None-Match with the last ETag, so an unchanged theme costs a few bytes. It ignores redirects, plain http and bodies over 64 KB. A file without a readable background and foreground never replaces the colours that are showing.
@@ -34,7 +36,7 @@ This fork asks for the INTERNET permission. Upstream Detent has none, and says s
 
 ## Tests
 
-`./gradlew testDebugUnitTest` runs the theme parser tests.
+`./gradlew testDebugUnitTest` runs the tests for the theme parser, the wallpaper reference and the label.
 
 ---
 

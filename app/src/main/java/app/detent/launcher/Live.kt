@@ -2,8 +2,10 @@ package app.detent.launcher
 
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 import kotlin.math.max
 import kotlin.math.pow
 
@@ -11,7 +13,37 @@ import kotlin.math.pow
  * A theme that follows another computer. The laptop publishes its colours as JSON in the shape of Flux's
  * flux.theme body: a name, an optional mode, and a colors map of "#rrggbb" values.
  */
-class LiveTheme(val name: String, val light: Boolean, val bg: Long, val fg: Long, val accent: Long, val hand: Long)
+class LiveTheme(
+    val name: String,
+    val light: Boolean,
+    val bg: Long,
+    val fg: Long,
+    val accent: Long,
+    val hand: Long,
+    val wall: LiveWallRef? = null,
+)
+
+/** The wallpaper a live theme points at: a path next to the theme file, and the SHA-256 of the image. */
+class LiveWallRef(val path: String, val sha: String)
+
+// Relative, no leading slash, no "..". A path like "//host/x" would otherwise name another host.
+private val WALL_PATH = Regex("^(?!/)(?!.*\\.\\.)[A-Za-z0-9._/-]{1,200}$")
+private val SHA256 = Regex("^[0-9a-f]{64}$")
+
+private fun readWall(json: JSONObject): LiveWallRef? {
+    val w = json.optJSONObject("wallpaper") ?: return null
+    val path = w.optString("path")
+    val sha = w.optString("sha256").lowercase()
+    return if (WALL_PATH.matches(path) && SHA256.matches(sha)) LiveWallRef(path, sha) else null
+}
+
+/** Where [path] lives next to [base], or null when it would leave the host that served the theme. */
+fun resolveWallUrl(base: URL, path: String): URL? {
+    if (!WALL_PATH.matches(path)) return null
+    val u = runCatching { URL(base, path) }.getOrNull() ?: return null
+    val same = u.protocol == "https" && u.host == base.host && u.port == base.port
+    return if (same) u else null
+}
 
 private val HEX = Regex("^#?([0-9a-fA-F]{6})(?:[0-9a-fA-F]{2})?$")
 
@@ -61,13 +93,13 @@ fun parseLiveTheme(body: String): LiveTheme? = try {
     }
     val name = json.optString("name").trim().take(24).ifEmpty { "laptop" }
     // The dot-hand art sits quietly behind the dial, so its dots only lift a little off the background.
-    LiveTheme(name, light, bg, fg, accent, mixRgb(fg, bg, .22))
+    LiveTheme(name, light, bg, fg, accent, mixRgb(fg, bg, .22), readWall(json))
 } catch (e: Exception) {
     null
 }
 
-/** Name on the dial, so a live theme can't be mistaken for the built-in theme of the same name. */
-private fun LiveTheme.label() = if (name == "laptop") name else "laptop · $name".take(17)
+/** Name on the dial. The tilde keeps a live theme from being mistaken for the built-in theme of the same name. */
+fun liveLabel(name: String) = if (name == "laptop") name else "~" + name.take(16)
 
 /** The theme dial entry that follows the laptop. It is always the last one. */
 object Live {
@@ -78,8 +110,9 @@ object Live {
     /** Index of the live entry, or -1 when none is set up. */
     val index get() = if (installed) THEMES.lastIndex else -1
 
-    fun install(t: LiveTheme) {
-        val def = ThemeDef(t.label(), GROUP, t.light, t.bg, t.fg, t.accent, null, t.hand)
+    /** [wall] is the path of the saved wallpaper, or null for the dot-hand art. */
+    fun install(t: LiveTheme, wall: String? = null) {
+        val def = ThemeDef(liveLabel(t.name), GROUP, t.light, t.bg, t.fg, t.accent, wall, t.hand)
         if (installed) {
             THEMES[THEMES.lastIndex] = def
             PALETTES[PALETTES.lastIndex] = Palette(def)
@@ -134,6 +167,43 @@ class LiveClient(private val url: URL) {
         }
     }
 
+    /**
+     * Downloads the wallpaper to [dest] when its SHA-256 is [LiveWallRef.sha]. Anything else leaves no file.
+     * This blocks, so call it off the main thread.
+     */
+    fun fetchWall(ref: LiveWallRef, dest: File): Boolean {
+        val target = resolveWallUrl(url, ref.path) ?: return false
+        val c = target.openConnection() as? HttpURLConnection ?: return false
+        return try {
+            c.connectTimeout = 4000
+            c.readTimeout = 10_000
+            c.instanceFollowRedirects = false
+            if (c.responseCode != 200) return false
+            val digest = MessageDigest.getInstance("SHA-256")
+            var size = 0
+            dest.outputStream().use { out ->
+                c.inputStream.use { input ->
+                    val buf = ByteArray(16 * 1024)
+                    while (true) {
+                        val n = input.read(buf)
+                        if (n < 0) break
+                        size += n
+                        check(size <= MAX_WALL_BYTES) { "wallpaper too large" }
+                        digest.update(buf, 0, n)
+                        out.write(buf, 0, n)
+                    }
+                }
+            }
+            val got = digest.digest().joinToString("") { "%02x".format(it) }
+            (got == ref.sha).also { if (!it) dest.delete() }
+        } catch (e: Exception) {
+            dest.delete()
+            false
+        } finally {
+            c.disconnect()
+        }
+    }
+
     /** A theme is a few kilobytes. Anything bigger is not one. */
     private fun readCapped(c: HttpURLConnection): String {
         val out = ByteArrayOutputStream()
@@ -151,5 +221,6 @@ class LiveClient(private val url: URL) {
 
     private companion object {
         const val MAX_BYTES = 64 * 1024
+        const val MAX_WALL_BYTES = 12 * 1024 * 1024
     }
 }

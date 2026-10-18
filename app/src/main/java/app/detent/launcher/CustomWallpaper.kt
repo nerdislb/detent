@@ -19,7 +19,15 @@ object CustomWallpaper {
      * The image is never larger than the screen. This blocks, so call it off the main thread.
      */
     fun save(ctx: Context, uri: Uri, w: Int, h: Int): File {
-        val source = ImageDecoder.createSource(ctx.contentResolver, uri)
+        val file = File(dir(ctx), "${System.currentTimeMillis()}.jpg")
+        crop(ImageDecoder.createSource(ctx.contentResolver, uri), w, h, file)
+        return file
+    }
+
+    /** The same crop for an image file, saved to [dest]. Used by the live wallpaper, which lives outside this folder. */
+    fun crop(src: File, w: Int, h: Int, dest: File) = crop(ImageDecoder.createSource(src), w, h, dest)
+
+    private fun crop(source: ImageDecoder.Source, w: Int, h: Int, dest: File) {
         val bitmap = ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
             val iw = info.size.width
             val ih = info.size.height
@@ -35,13 +43,11 @@ object CustomWallpaper {
             decoder.crop = Rect(left, top, left + cw, top + ch)
             decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
         }
-        val file = File(dir(ctx), "${System.currentTimeMillis()}.jpg")
         try {
-            file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 92, it) }
+            dest.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 92, it) }
         } finally {
             bitmap.recycle()
         }
-        return file
     }
 
     /** Deletes every saved wallpaper except [keep]. */

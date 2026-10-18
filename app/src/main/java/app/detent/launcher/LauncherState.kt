@@ -19,6 +19,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.net.URL
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -62,6 +63,12 @@ interface Host {
 
     /** Opens the clock app, with the reveal animation growing from [bounds]. */
     fun openClock(bounds: Rect?)
+
+    /** The app's private folder. The live wallpaper is kept there. */
+    fun dataDir(): File
+
+    /** Crops [src] to the shape of the screen and saves it as [dest]. This blocks, so call it off the main thread. */
+    fun fitWallpaper(src: File, dest: File): Boolean
 
     /** Sets the lock screen and system wallpaper off the main thread, then calls [done] on the main thread. */
     fun setWallpaper(theme: ThemeDef, pal: Palette, left: Boolean, custom: String?, done: (Boolean) -> Unit)
@@ -187,6 +194,7 @@ class LauncherState(
     var isHome by mutableStateOf(false)
         private set
     private var liveJob: Job? = null
+    private var liveTheme: LiveTheme? = null
     private val live: LiveClient? = BuildConfig.LIVE_URL.takeIf { it.startsWith("https://") }
         ?.let { runCatching { LiveClient(URL(it)) }.getOrNull() }
     private var unread by mutableStateOf<Map<String, Long>>(emptyMap())
@@ -200,7 +208,11 @@ class LauncherState(
         fb.sound = sound
         fb.haptics = haptics
         // The live theme has to be on the dial before the saved theme index is read.
-        if (live != null) Live.install(prefs.liveBody?.let(::parseLiveTheme) ?: LiveTheme("laptop", false, 0xFF1D2021, 0xFFEBDBB2, 0xFFFE8019, 0xFF3A3938))
+        if (live != null) {
+            liveTheme = prefs.liveBody?.let(::parseLiveTheme)
+                ?: LiveTheme("laptop", false, 0xFF1D2021, 0xFFEBDBB2, 0xFFFE8019, 0xFF3A3938)
+            installLive()
+        }
         val saved = prefs.load()
         if (saved != null) {
             cfg = saved.cfg
@@ -315,13 +327,56 @@ class LauncherState(
                 val r = withContext(Dispatchers.IO) { client.fetch() }
                 if (r is Fetch.Updated) {
                     prefs.liveBody = r.body
-                    Live.install(r.theme)
-                    // The lock screen follows when the live theme is the one in use.
-                    if (ob == null && cfg.theme == Live.index) syncWallpaper()
+                    liveTheme = r.theme
+                    applyLive()
                 }
+                fetchLiveWall(client)
                 delay(LIVE_POLL_MS)
             }
         }
+    }
+
+    private fun liveDir() = File(host.dataDir(), "live")
+
+    private fun wallFile(ref: LiveWallRef) = File(liveDir(), "wall-${ref.sha.take(16)}.jpg")
+
+    /** Puts the live theme on the dial, with its wallpaper when that is already saved. */
+    private fun installLive() {
+        val t = liveTheme ?: return
+        Live.install(t, t.wall?.let(::wallFile)?.takeIf { it.exists() }?.path)
+    }
+
+    private fun applyLive() {
+        installLive()
+        // The lock screen follows when the live theme is the one in use.
+        if (ob == null && cfg.theme == Live.index) syncWallpaper()
+    }
+
+    /** Saves the wallpaper of the live theme when it is not on the phone yet. A failed try repeats at the next poll. */
+    private suspend fun fetchLiveWall(client: LiveClient) {
+        val t = liveTheme ?: return
+        val ref = t.wall
+        val file = ref?.let(::wallFile)
+        if (file != null && file.exists()) return
+        if (ref != null && file != null) {
+            val ok = withContext(Dispatchers.IO) {
+                val dir = liveDir().apply { mkdirs() }
+                val raw = File(dir, "download.tmp")
+                val fit = File(dir, "fit.tmp")
+                try {
+                    client.fetchWall(ref, raw) && host.fitWallpaper(raw, fit) && fit.renameTo(file)
+                } finally {
+                    raw.delete()
+                    fit.delete()
+                }
+            }
+            if (!ok) return
+        }
+        // Keep only the wallpaper that is in use.
+        val stale = withContext(Dispatchers.IO) {
+            liveDir().listFiles().orEmpty().filter { it.path != file?.path }.onEach { it.delete() }
+        }
+        if (liveTheme === t && (file != null || stale.isNotEmpty())) applyLive()
     }
 
     // Clock.
@@ -670,7 +725,7 @@ class LauncherState(
     private fun syncWallpaper() {
         if (!lockWall) return
         val custom = customWall
-        val key = "${THEMES[cfg.theme].name}|${PALETTES[cfg.theme].bg.value}|${cfg.side}|${custom ?: "theme"}"
+        val key = "${THEMES[cfg.theme].name}|${PALETTES[cfg.theme].bg.value}|${THEMES[cfg.theme].wall.orEmpty()}|${cfg.side}|${custom ?: "theme"}"
         if (prefs.appliedWall == key) return
         host.setWallpaper(THEMES[cfg.theme], PALETTES[cfg.theme], left, custom) { ok ->
             if (ok) prefs.appliedWall = key else showToast("can't set the lock screen")

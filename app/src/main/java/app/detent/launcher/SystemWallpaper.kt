@@ -44,7 +44,9 @@ object SystemWallpaper {
                 left && theme.wallLeft != null -> theme.wallLeft
                 else -> theme.wall
             }
-            ctx.assets.open(path!!).use { BitmapFactory.decodeStream(it) }
+            // An absolute path is a saved live wallpaper. Anything else is an asset.
+            if (path!!.startsWith("/")) BitmapFactory.decodeFile(path) ?: error("can't read $path")
+            else ctx.assets.open(path).use { BitmapFactory.decodeStream(it) }
         }
         val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
         if (hand) paint.colorFilter = ColorMatrixColorFilter(handMatrix(pal))
