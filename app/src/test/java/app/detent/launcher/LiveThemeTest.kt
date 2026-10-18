@@ -142,4 +142,17 @@ class LiveThemeTest {
         assertEquals("laptop", liveLabel("laptop"))
         assertEquals(17, liveLabel("x".repeat(24)).length)
     }
+
+    @Test
+    fun anAddressHasToBeAPlainHttpsUrl() {
+        assertEquals("https://laptop.example:8444/theme.json", parseLiveUrl(" https://laptop.example:8444/theme.json ").toString())
+        assertNull(parseLiveUrl("http://laptop.example/theme.json"))
+        assertNull(parseLiveUrl("ftp://laptop.example/theme.json"))
+        assertNull(parseLiveUrl("laptop.example/theme.json"))
+        assertNull(parseLiveUrl("https://user:pw@laptop.example/theme.json"))
+        assertNull(parseLiveUrl("https:///theme.json"))
+        assertNull(parseLiveUrl("https://laptop.example/a b.json"))
+        assertNull(parseLiveUrl("https://laptop.example/" + "x".repeat(400)))
+        assertNull(parseLiveUrl(""))
+    }
 }

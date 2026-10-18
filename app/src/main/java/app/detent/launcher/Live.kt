@@ -98,6 +98,14 @@ fun parseLiveTheme(body: String): LiveTheme? = try {
     null
 }
 
+/** The address of the theme file, or null when it is not a plain https address. */
+fun parseLiveUrl(text: String): URL? {
+    val s = text.trim()
+    if (s.length > 300 || s.any { it.isWhitespace() }) return null
+    val u = runCatching { URL(s) }.getOrNull() ?: return null
+    return u.takeIf { it.protocol == "https" && it.host.isNotEmpty() && it.userInfo == null && it.ref == null }
+}
+
 /** Name on the dial. The tilde keeps a live theme from being mistaken for the built-in theme of the same name. */
 fun liveLabel(name: String) = if (name == "laptop") name else "~" + name.take(16)
 

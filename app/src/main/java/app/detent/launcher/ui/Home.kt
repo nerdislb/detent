@@ -143,7 +143,7 @@ fun DetentRoot(s: LauncherState) {
 @Composable
 private fun Home(s: LauncherState) {
     val themeStep = s.ob == Step.THEME
-    val live = if (themeStep) mod(s.index, THEMES.size) else s.cfg.theme
+    val live = if (themeStep) mod(s.index, THEMES.size) else s.cfg.theme.coerceIn(0, THEMES.lastIndex)
     val pal = PALETTES[live]
     // While the theme dial turns, colours follow every tick. The wallpaper waits until the dial stops.
     var wall by remember { mutableIntStateOf(live) }
@@ -168,7 +168,8 @@ private fun Home(s: LauncherState) {
             .focusRequester(focus).focusable()
             .onKeyEvent { it.type == KeyEventType.KeyDown && s.key(it.key) },
     ) {
-        Wallpaper(THEMES[wall], pal, s.left, s.customWall)
+        // The wallpaper index can outlive its theme: the live theme leaves the list when it is switched off.
+        Wallpaper(THEMES[wall.coerceIn(0, THEMES.lastIndex)], pal, s.left, s.customWall)
         GestureLayer(s)
         Clock(s, pal)
         DialCanvas(s, pal)
@@ -178,6 +179,7 @@ private fun Home(s: LauncherState) {
         if (s.ob != null) Onboarding(s, pal, THEMES[live])
         QuickMenuView(s, pal)
         SearchSheet(s, pal)
+        AddressSheet(s, pal)
         AppSheet(s, pal)
         Title(s, pal)
         ToastView(s, pal)
@@ -338,26 +340,30 @@ private fun Clock(s: LauncherState, pal: Palette) {
     }
     val time = hour + ":" + cal.get(Calendar.MINUTE).toString().padStart(2, '0')
     val date = "${DAYS[cal.get(Calendar.DAY_OF_WEEK) - 1]} ${cal.get(Calendar.DAY_OF_MONTH)} ${MONTHS[cal.get(Calendar.MONTH)]}"
-    var bounds by remember { mutableStateOf<android.graphics.Rect?>(null) }
-    val active = s.ob == null && !s.search && s.open == null && s.menu == null && s.scrub == null
+    val active = s.ob == null && !s.search && !s.address && s.open == null && s.menu == null && s.scrub == null
     SideBox(s.left, u.clockTop, 28f, Modifier.graphicsLayer { this.alpha = alpha }) {
         Column(
-            Modifier
-                .onGloballyPositioned { bounds = it.boundsInWindow().toAndroidRect() }
-                .combinedClickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    enabled = active,
-                    onClick = { s.openClock(bounds) },
-                    onLongClick = { s.holdClock() },
-                ),
             horizontalAlignment = if (s.left) Alignment.End else Alignment.Start,
-            verticalArrangement = Arrangement.spacedBy(u.dp(6f)),
         ) {
-            Txt(time, 68f, pal.fg, weight = FontWeight.Light, spacing = -.05f, line = 1f)
-            Txt(date, 13f, pal.muted2, spacing = .02f)
+            // The time opens the clock app, the date opens the calendar. Holding either opens the setup.
+            Txt(time, 68f, pal.fg, Modifier.hit(active, { s.openClock(it) }, { s.holdClock() }), weight = FontWeight.Light, spacing = -.05f, line = 1f)
+            Txt(date, 13f, pal.muted2, Modifier.hit(active, { s.openCalendar(it) }, { s.holdClock() }).padding(vertical = u.dp(6f)), spacing = .02f)
         }
     }
+}
+
+/** A tap target that reports its window bounds, so the opened app can grow out of it. */
+@Composable
+private fun Modifier.hit(enabled: Boolean, onTap: (android.graphics.Rect?) -> Unit, onHold: () -> Unit): Modifier {
+    var bounds by remember { mutableStateOf<android.graphics.Rect?>(null) }
+    return onGloballyPositioned { bounds = it.boundsInWindow().toAndroidRect() }
+        .combinedClickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+            enabled = enabled,
+            onClick = { onTap(bounds) },
+            onLongClick = onHold,
+        )
 }
 
 @Composable

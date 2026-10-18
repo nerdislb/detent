@@ -121,6 +121,7 @@ fun Onboarding(s: LauncherState, pal: Palette, theme: ThemeDef) {
                         if (Live.installed) {
                             Chip(Live.GROUP, theme.group == Live.GROUP, pal, { s.jumpGroup(Live.GROUP) }, weight = FontWeight.Medium)
                         }
+                        Chip("address", false, pal, { s.openAddress() }, weight = FontWeight.Medium)
                     }
                     Row(horizontalArrangement = gap) {
                         Chip("theme wallpaper", s.customWall == null, pal, { s.useThemeWallpaper() })

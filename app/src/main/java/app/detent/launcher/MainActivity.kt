@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Process
 import android.provider.AlarmClock
+import android.provider.CalendarContract
 import android.provider.Settings
 import android.util.DisplayMetrics
 import androidx.activity.ComponentActivity
@@ -137,17 +138,27 @@ class MainActivity : ComponentActivity(), Host {
         if (detail == null || !open(detail)) open(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
     }
 
-    /**
-     * Opens the clock app on its own start tab. The app is the one that answers the alarm intent, so it is the
-     * user's own clock app. Without a launcher entry the alarm list opens instead.
-     */
     override fun openClock(bounds: Rect?) {
         val alarms = Intent(AlarmClock.ACTION_SHOW_ALARMS)
+        openDefault(alarms, alarms, bounds)
+    }
+
+    override fun openCalendar(bounds: Rect?) {
+        val main = Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_CALENDAR)
+        val today = Intent(Intent.ACTION_VIEW, CalendarContract.CONTENT_URI.buildUpon().appendPath("time").build())
+        openDefault(main, today, bounds)
+    }
+
+    /**
+     * Opens the app that answers [probe] on its own start tab, so it is the user's own clock or calendar app.
+     * Without a launcher entry for it, [fallback] runs instead.
+     */
+    private fun openDefault(probe: Intent, fallback: Intent, bounds: Rect?) {
         val pkg = runCatching {
-            packageManager.resolveActivity(alarms, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
+            packageManager.resolveActivity(probe, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
         }.getOrNull()?.takeIf { it != "android" }
         val app = pkg?.let { p -> repo.apps.firstOrNull { it.component.packageName == p && it.user == Process.myUserHandle() } }
-        if (app != null) launchApp(app, bounds) else open(alarms)
+        if (app != null) launchApp(app, bounds) else open(fallback)
     }
 
     override fun dataDir(): File = filesDir

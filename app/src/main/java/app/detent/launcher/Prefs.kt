@@ -58,6 +58,11 @@ class Prefs(ctx: Context) {
         get() = sp.getString("appliedWall", null)
         set(v) = sp.edit { putString("appliedWall", v) }
 
+    /** The address typed in the app. Null means "none typed", so the build setting counts; empty switches it off. */
+    var liveUrl: String?
+        get() = sp.getString("liveUrl", null)
+        set(v) = sp.edit { if (v == null) remove("liveUrl") else putString("liveUrl", v) }
+
     /** The last theme body from the laptop, so the live theme has its colours before the first fetch. */
     var liveBody: String?
         get() = sp.getString("liveBody", null)

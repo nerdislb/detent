@@ -64,6 +64,9 @@ interface Host {
     /** Opens the clock app, with the reveal animation growing from [bounds]. */
     fun openClock(bounds: Rect?)
 
+    /** Opens the calendar app, with the reveal animation growing from [bounds]. */
+    fun openCalendar(bounds: Rect?)
+
     /** The app's private folder. The live wallpaper is kept there. */
     fun dataDir(): File
 
@@ -195,8 +198,9 @@ class LauncherState(
         private set
     private var liveJob: Job? = null
     private var liveTheme: LiveTheme? = null
-    private val live: LiveClient? = BuildConfig.LIVE_URL.takeIf { it.startsWith("https://") }
-        ?.let { runCatching { LiveClient(URL(it)) }.getOrNull() }
+    /** The address typed in the app wins over the one built in. */
+    private fun liveAddress() = prefs.liveUrl ?: BuildConfig.LIVE_URL
+    private var live: LiveClient? = parseLiveUrl(liveAddress())?.let(::LiveClient)
     private var unread by mutableStateOf<Map<String, Long>>(emptyMap())
     private var opened by mutableStateOf(prefs.opened())
 
@@ -307,6 +311,7 @@ class LauncherState(
             open != null -> close()
             menu != null -> closeMenu()
             search -> closeSearch()
+            address -> closeAddress()
             ob in Step.SHAPE..Step.FEEL -> obBack()
         }
     }
@@ -379,6 +384,66 @@ class LauncherState(
         if (liveTheme === t && (file != null || stale.isNotEmpty())) applyLive()
     }
 
+    // Laptop address.
+
+    var address by mutableStateOf(false)
+        private set
+
+    /** True when an address is set, typed or built in. The clear button shows then. */
+    val hasAddress get() = live != null
+
+    /** What the address field starts with. */
+    fun addressStart() = liveAddress()
+
+    fun openAddress() {
+        tap()
+        address = true
+    }
+
+    fun closeAddress() {
+        fb.tap()
+        address = false
+    }
+
+    /** Saves a typed address. Returns false when it is not a plain https address. */
+    fun saveAddress(text: String): Boolean {
+        val url = parseLiveUrl(text) ?: return false
+        tap()
+        prefs.liveUrl = url.toString()
+        prefs.liveBody = null
+        liveTheme = LiveTheme("laptop", false, 0xFF1D2021, 0xFFEBDBB2, 0xFFFE8019, 0xFF3A3938)
+        wipeLiveDir()
+        live = LiveClient(url)
+        installLive()
+        address = false
+        if (resumed) startLive()
+        jumpGroup(Live.GROUP)
+        return true
+    }
+
+    /** Switches the live theme off. A built-in address stays off too, because the empty value is saved. */
+    fun clearAddress() {
+        tap()
+        prefs.liveUrl = ""
+        prefs.liveBody = null
+        liveJob?.cancel()
+        live = null
+        liveTheme = null
+        wipeLiveDir()
+        address = false
+        val wasSelected = cfg.theme == Live.index
+        Live.remove()
+        if (wasSelected || cfg.theme >= THEMES.size) cfg = cfg.copy(theme = 0)
+        // Cancelling the setup brings back the old settings, so they must not name the removed theme either.
+        prevCfg = prevCfg?.let { if (it.theme >= THEMES.size) it.copy(theme = 0) else it }
+        if (ob == Step.THEME) jumpTo(cfg.theme.toFloat())
+        persist()
+    }
+
+    private fun wipeLiveDir() {
+        liveDir().listFiles()?.forEach { it.delete() }
+    }
+
     // Clock.
 
     /** Tap the clock: open the clock app. */
@@ -386,6 +451,13 @@ class LauncherState(
         if (blocked() || ob != null || scrub != null) return
         fb.tap()
         host.openClock(bounds)
+    }
+
+    /** Tap the date: open the calendar app. */
+    fun openCalendar(bounds: Rect?) {
+        if (blocked() || ob != null || scrub != null) return
+        fb.tap()
+        host.openCalendar(bounds)
     }
 
     /** Hold the clock: the setup, like holding an empty spot. */
@@ -493,7 +565,7 @@ class LauncherState(
     // Gestures. All coordinates are design units.
 
     private fun blocked() =
-        open != null || search || menu != null || ob == Step.WELCOME || ob == Step.APPS
+        open != null || search || address || menu != null || ob == Step.WELCOME || ob == Step.APPS
 
     private fun mirX(x: Float) = if (left) W - x else x
 

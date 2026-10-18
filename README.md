@@ -6,7 +6,8 @@ This fork of [Detent](https://github.com/bjarneo/detent) adds a theme that follo
 
 - **Live theme.** One extra theme, `laptop`, takes its colours from a JSON file that your computer publishes. Detent reads it while it is in front: when it starts and every 30 seconds after. The theme changes in place, and the lock screen follows when the lock screen switch is on. The last theme is kept for offline use. The theme sits on the dial after the built-in ones, marked with a tilde (`~smoke`), and the theme step has a `laptop` chip to jump to it.
 - **Live wallpaper.** When the theme file names a wallpaper, Detent downloads it once, checks its SHA-256, crops it to the shape of the screen and shows it behind the dial, like a built-in Omarchy theme. A new wallpaper replaces the old one, and the lock screen follows when the lock screen switch is on. Your own wallpaper from the setup still wins. Without a wallpaper in the file, the theme uses the dot-hand art.
-- **Clock.** Tap the clock to open the clock app that answers the alarm intent. Hold it for the setup, as before.
+- **Clock and date.** Tap the time to open the clock app that answers the alarm intent. Tap the date to open the calendar app. Hold either for the setup, as before.
+- **Address in the app.** The theme step has an `address` chip. It opens a sheet where you type or paste the https address of the theme file, with `save` and `switch off`. An address typed there wins over the one built in; `switch off` also silences a built-in one.
 
 ## The theme file
 
@@ -22,7 +23,7 @@ Detent sends If-None-Match with the last ETag, so an unchanged theme costs a few
 
 ## Switching it on
 
-The address comes from the build, not from the source, so no address is in this repository. Without one, the live theme is off and the app behaves like Detent.
+The address is not in this repository. Type it in the app (theme step, `address`), or build it in. Without one, the live theme is off and the app behaves like Detent.
 
 ```
 ./gradlew assembleRelease -PdetentLiveUrl=https://your-computer.example/theme.json
