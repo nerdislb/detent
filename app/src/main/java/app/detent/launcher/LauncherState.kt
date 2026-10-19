@@ -153,6 +153,8 @@ class LauncherState(
         private set
     var obSeq by mutableIntStateOf(0)
         private set
+    /** The part of the setup that opens first when it is edited: the one used last, and the theme at first. */
+    private var editStep = Step.THEME
     private var prevCfg: Cfg? = null
     private var prevKeys: Set<String>? = null
 
@@ -769,8 +771,27 @@ class LauncherState(
         prevCustom = customWall
         obEdit = true
         search = false
-        ob = Step.SHAPE
-        obSeq++
+        appPos = pos.roundToInt()
+        goTo(editStep)
+    }
+
+    /** The tabs of the edit menu: jump to one part of the setup. */
+    fun editTab(step: Int) {
+        if (ob == step) return
+        tap()
+        goTo(step)
+    }
+
+    /** Throws the changes away: the old settings, wallpaper and dial position come back. */
+    private fun cancelSetup() {
+        if (ob == Step.THEME) jumpTo(appPos.toFloat())
+        cfg = prevCfg ?: cfg
+        dialKeys = prevKeys ?: dialKeys
+        customWall = prevCustom
+        host.cleanWallpapers(prevCustom)
+        ob = null
+        syncRadius()
+        run()
     }
 
     private fun goTo(n: Int?) {
@@ -785,6 +806,7 @@ class LauncherState(
         }
         ob = n
         obSeq++
+        if (obEdit && n != null) editStep = n
         if (n == null) {
             persist()
             host.cleanWallpapers(customWall)
@@ -827,8 +849,12 @@ class LauncherState(
 
     fun obNext() {
         tap()
+        if (obEdit) {
+            goTo(null)
+            return
+        }
         when (val o = ob ?: return) {
-            Step.FEEL -> goTo(if (obEdit) null else Step.READY)
+            Step.FEEL -> goTo(Step.READY)
             Step.READY -> goTo(null)
             else -> goTo(o + 1)
         }
@@ -837,17 +863,10 @@ class LauncherState(
     fun obBack() {
         tap()
         val o = ob ?: return
-        if (o == Step.SHAPE) {
-            if (!obEdit) {
-                goTo(Step.WELCOME)
-            } else {
-                cfg = prevCfg ?: cfg
-                dialKeys = prevKeys ?: dialKeys
-                customWall = prevCustom
-                host.cleanWallpapers(prevCustom)
-                ob = null
-                syncRadius()
-            }
+        if (obEdit) {
+            cancelSetup()
+        } else if (o == Step.SHAPE) {
+            goTo(Step.WELCOME)
         } else if (o > Step.SHAPE) {
             goTo(o - 1)
         }

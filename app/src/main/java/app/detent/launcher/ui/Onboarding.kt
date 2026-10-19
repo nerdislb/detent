@@ -4,6 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -19,7 +20,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -30,13 +30,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import app.detent.launcher.Ease
 import app.detent.launcher.LAYOUTS
-import app.detent.launcher.Live
 import app.detent.launcher.LauncherState
+import app.detent.launcher.Live
 import app.detent.launcher.Palette
 import app.detent.launcher.Side
 import app.detent.launcher.Step
@@ -45,7 +46,7 @@ import kotlinx.coroutines.launch
 
 private class Copy(val counter: String, val title: String, val body: String)
 
-private fun copy(step: Int, custom: Boolean) = when (step) {
+private fun copy(step: Int, custom: Boolean, edit: Boolean) = when (step) {
     Step.WELCOME -> Copy("", "dial", "your apps sit on a wheel at the edge. turn it to choose, tap to open.")
     Step.SHAPE -> Copy("1 / 4", "shape", "pick a layout and a side, then turn the dial to try it.")
     Step.THEME -> if (custom) Copy("2 / 4", "theme", "turn the dial to pick the colours. your wallpaper stays.")
@@ -59,7 +60,7 @@ private fun copy(step: Int, custom: Boolean) = when (step) {
 fun Onboarding(s: LauncherState, pal: Palette, theme: ThemeDef) {
     val u = LocalUnits.current
     val step = s.ob ?: return
-    val c = copy(step, s.customWall != null)
+    val c = copy(step, s.customWall != null, s.obEdit).let { if (s.obEdit) Copy("", it.title, it.body) else it }
 
     // Each step fades in and rises 8 units.
     val fade = remember { Animatable(1f) }
@@ -84,6 +85,8 @@ fun Onboarding(s: LauncherState, pal: Palette, theme: ThemeDef) {
                     .background(Brush.verticalGradient(0f to pal.bg.copy(alpha = 0f), .3f to pal.bg, 1f to pal.bg)),
             )
         }
+
+        if (s.obEdit) EditTabs(s, pal, step, enter)
 
         SideBox(s.left, 84f, 28f, enter) {
             Column(Modifier.width(u.dp(170f)), verticalArrangement = Arrangement.spacedBy(u.dp(14f))) {
@@ -185,14 +188,37 @@ private fun AppChips(s: LauncherState, pal: Palette, enter: Modifier, bottom: Fl
     }
 }
 
+private val TABS = listOf(Step.SHAPE to "shape", Step.THEME to "theme", Step.APPS to "apps", Step.FEEL to "feel")
+
+/** The edit menu: one tab for each part of the setup. */
+@Composable
+private fun EditTabs(s: LauncherState, pal: Palette, step: Int, enter: Modifier) {
+    val u = LocalUnits.current
+    SideBox(s.left, maxOf(44f, u.top + 14f), 20f, enter) {
+        Row(horizontalArrangement = Arrangement.spacedBy(u.dp(2f))) {
+            TABS.forEach { (id, name) ->
+                val on = id == step
+                Column(
+                    Modifier.height(u.dp(40f)).tap { s.editTab(id) }.padding(horizontal = u.dp(8f)),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Txt(name, 14f, if (on) pal.fg else pal.muted2, weight = if (on) FontWeight.Medium else FontWeight.Normal)
+                    Box(Modifier.padding(top = u.dp(5f)).width(u.dp(14f)).height(u.dp(2f)).background(if (on) pal.accent else Color.Transparent))
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun Nav(s: LauncherState, pal: Palette, step: Int) {
     val u = LocalUnits.current
     val showBack = step != Step.WELCOME && step != Step.READY
-    val back = if (step == Step.SHAPE && s.obEdit) "cancel" else "back"
-    val next = when (step) {
+    val back = if (s.obEdit) "cancel" else "back"
+    val next = if (s.obEdit) "done" else when (step) {
         Step.WELCOME -> "begin"
-        Step.FEEL -> if (s.obEdit) "done" else "next"
+        Step.FEEL -> "next"
         Step.READY -> "go home"
         else -> "next"
     }
